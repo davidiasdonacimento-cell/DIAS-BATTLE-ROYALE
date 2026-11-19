@@ -511,8 +511,9 @@ func _make_tree(pos: Vector3) -> void:
 	trunk.position = pos + Vector3(0, 2.0, 0)
 	add_child(trunk)
 	var crown := MeshInstance3D.new()
-	var cone := ConeMesh.new()
-	cone.radius = 2.7
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.0
+	cone.bottom_radius = 2.7
 	cone.height = 6.0
 	cone.material = _material(Color(0.08, rng.randf_range(0.32, 0.48), 0.18))
 	crown.mesh = cone
