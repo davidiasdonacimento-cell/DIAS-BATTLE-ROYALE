@@ -32,21 +32,54 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK packages required by Godot 4.4
         run: |
-          set -e
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.1" "cmdline-tools;latest"
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmdline-tools;latest" \
+            "cmake;3.10.2.4988404" \
+            "ndk;23.2.8568313"
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+      - name: Configure Godot Android export paths
+        run: |
+          set -euo pipefail
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -d "$ANDROID_HOME/platforms/android-34"
+          test -d "$ANDROID_HOME/build-tools/34.0.0"
+          test -d "$ANDROID_HOME/ndk/23.2.8568313"
+          test -d "$ANDROID_HOME/cmake/3.10.2.4988404"
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          EOF
 
       - name: Create debug signing key
         run: |
+          set -euo pipefail
           mkdir -p "$HOME/.android"
-          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -validity 10000 -keyalg RSA -keysize 2048
+          keytool -genkeypair -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -validity 10000 -keyalg RSA -keysize 2048
 
-      - name: Download Godot 4.4.1
+      - name: Download Godot 4.4.1 and export templates
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p "$HOME/godot" "$HOME/.local/share/godot/export_templates/4.4.1.stable"
           curl -L --fail -o /tmp/godot.zip https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
           unzip -q /tmp/godot.zip -d "$HOME/godot"
@@ -56,14 +89,21 @@ jobs:
           mkdir -p /tmp/godot-templates
           unzip -q /tmp/templates.tpz -d /tmp/godot-templates
           cp -a /tmp/godot-templates/templates/. "$HOME/.local/share/godot/export_templates/4.4.1.stable/"
+          test -f "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_debug.apk"
+          test -f "$HOME/.local/share/godot/export_templates/4.4.1.stable/android_release.apk"
 
-      - name: Validate project
-        run: godot --headless --editor --path . --quit
+      - name: Validate Godot project and Android toolchain
+        run: |
+          set -euo pipefail
+          godot --headless --editor --path . --quit --verbose
+          godot --headless --path . --export-debug Android /tmp/DIAS-BATTLE-ROYALE-check.apk --verbose
 
       - name: Export Android APK
         run: |
+          set -euo pipefail
           mkdir -p build
           godot --headless --path . --export-debug Android build/DIAS-BATTLE-ROYALE.apk
+          test -s build/DIAS-BATTLE-ROYALE.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
