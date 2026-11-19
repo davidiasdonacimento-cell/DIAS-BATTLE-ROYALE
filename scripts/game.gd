@@ -22,6 +22,8 @@ var storm_radius := 112.0
 var beacon_area: Area3D
 var beacon_unlocked := false
 var built_count := 0
+var bots: Array[Node3D] = []
+var bot_targets: Array[Vector3] = []
 var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
@@ -29,12 +31,27 @@ func _ready() -> void:
 	_make_environment()
 	_make_island()
 	_make_player()
+	_make_bots()
 	_make_plane()
 	_make_collectibles()
 	_make_beacon()
 	_make_hud()
 	_update_hud()
 	_show_notice("DIAS ISLAND ROYALE  •  Toque em SALTAR para iniciar!")
+
+func _process(delta: float) -> void:
+	for i in range(bots.size()):
+		var bot := bots[i]
+		if not is_instance_valid(bot):
+			continue
+		var target: Vector3 = bot_targets[i]
+		var flat_target := Vector3(target.x, bot.position.y, target.z)
+		if bot.position.distance_to(flat_target) < 2.0:
+			var angle := rng.randf_range(0.0, TAU)
+			var radius := rng.randf_range(12.0, 70.0)
+			bot_targets[i] = Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+		else:
+			bot.position = bot.position.move_toward(flat_target, delta * 2.2)
 
 func _physics_process(delta: float) -> void:
 	elapsed += delta
@@ -173,6 +190,34 @@ func _make_player() -> void:
 	camera.rotation_degrees.x = -12
 	spring.add_child(camera)
 	camera.current = true
+
+func _make_bots() -> void:
+	# Exploradores autonomos que percorrem a ilha; nao atacam o jogador.
+	for i in range(6):
+		var bot := Node3D.new()
+		bot.name = "IslandExplorer_%d" % (i + 1)
+		var body := MeshInstance3D.new()
+		var capsule := CapsuleMesh.new()
+		capsule.radius = 0.48
+		capsule.height = 1.8
+		capsule.material = _material(Color(0.95, 0.68, 0.18) if i % 2 == 0 else Color(0.72, 0.42, 0.92))
+		body.mesh = capsule
+		body.position.y = 0.9
+		bot.add_child(body)
+		var head := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.32
+		sphere.height = 0.64
+		sphere.material = _material(Color(0.92, 0.78, 0.62))
+		head.mesh = sphere
+		head.position.y = 1.85
+		bot.add_child(head)
+		var angle := TAU * float(i) / 6.0
+		bot.position = Vector3(cos(angle) * 28.0, 0.0, sin(angle) * 28.0)
+		add_child(bot)
+		bots.append(bot)
+		var target_angle := angle + 1.4
+		bot_targets.append(Vector3(cos(target_angle) * 48.0, 0.0, sin(target_angle) * 48.0))
 
 func _make_plane() -> void:
 	plane = Node3D.new()
